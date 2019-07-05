@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "/Users/mikes/Documents/PlatformIO/Projects/CArPArkStation8266"
+		},
+		{
+			"path": "/Users/mikes/Documents/PlatformIO/Projects/ESP8266 Test"
+		},
+		{
+			"path": "/Users/mikes/Documents/PlatformIO/Projects/LoRa Mini Tracker"
+		},
+		{
+			"path": "/Users/mikes/Documents/PlatformIO/Projects/ArduinoLibs"
+		},
+		{
+			"path": "/Users/mikes/Documents/Arduino/LoraHandheldAVR_I2C"
+		}
+	],
+	"settings": {
+		"terminal.integrated.env.osx": {
+			"PATH": "/Users/mikes/.platformio/penv/bin:/Users/mikes/.platformio/penv:/usr/local/bin:/Users/mikes/.rbenv/shims:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands",
+			"PLATFORMIO_CALLER": "vscode"
+		}
+	}
+}
