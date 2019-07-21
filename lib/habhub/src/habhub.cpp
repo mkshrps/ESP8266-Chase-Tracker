@@ -36,14 +36,15 @@ int SendHabPayload(char *payload,char *docID){
 //        const char * url_base_test = "http://192.168.1.6:1880/habitat";
         
 
-        char url[strlen(url_base)+70];
+        char url[strlen(url_base)+100];
 
 //   trap any errors here use snprintf
 // use this when testing with node red
 //        sprintf( url, url_base_test, docID);
+        Serial.println(payload);
 
         sprintf( url, url_base, docID);
-        //Serial.println(url);
+        Serial.println(url);
         Serial.print("Send packet to habhub - Response=");
 
         http.begin(url);
@@ -80,10 +81,6 @@ int SendHabPayload(char *payload,char *docID){
 int uploadTelemetryPacket( char * Sentence , int packetNumber, char * callSign)
 {
 
-       // char url[200];
-        //char base64_data[200];
-        
-        size_t base64_length;
         SHA256_CTX ctx;
         unsigned char hash[32];
         char doc_id[70];
@@ -91,50 +88,54 @@ int uploadTelemetryPacket( char * Sentence , int packetNumber, char * callSign)
         char now[32];
         time_t rawtime;
         struct tm *tm;
-
-		//int retries;
-		// long int http_resp;
-        //char Sentence[200];
                
         // Get formatted timestamp
         time( &rawtime );
         tm = gmtime( &rawtime );
         tm->tm_year = 2019;
-        tm->tm_mon =  4;
-        tm->tm_mday = 3;
+        tm->tm_mon =  7;
+        tm->tm_mday = 19;
         strftime( now, sizeof( now ), "%Y-%0m-%0dT%H:%M:%SZ", tm );
+        int len = strlen(Sentence); 
+        
+        /*
+        Serial.print("Sentence Length = ");
+        Serial.print(len);
+        Serial.print("--");
+        Serial.println(Sentence[len-2]);        
+        
+        //Sentence[len] = '\n';
+        //Sentence[len + 1] = '\0';
+        
+        Serial.print("HABHUB Payload = ");
+        Serial.println(Sentence);
 
         // Grab current telemetry string and append a linefeed
-        //sprintf( Sentence, "%s\n", telemetry );
-       // Serial.print(" Sentence to encode:");
-       // Serial.println(Sentence);
-
+        
         // Convert sentence to base64 for transmission to the web server
         /*
         xbase64_encode( Sentence, strlen( Sentence ), &base64_length,
                        base64_data );
         base64_data[base64_length] = '\0';
 
-        
-
         // Take SHA256 hash of the base64 version and express as hex.  This will be the document ID
-        
         sha256_init( &ctx );
         sha256_update( &ctx, base64_data, base64_length );
         sha256_final( &ctx, hash );
         hash_to_hex( hash, doc_id );
-*/        
-        String base64_data = base64::encode(Sentence);
+*/      
+
+        String base64_data = base64::encode(Sentence,false);
+        Serial.println(base64_data.c_str());
         sha256_init( &ctx );
         sha256_update( &ctx, (char *) base64_data.c_str(), base64_data.length());
         sha256_final( &ctx, hash );
         // create doc_id as hex
         hash_to_hex( hash, doc_id );
 
-       // Serial.println(doc_id);
-        
+        // Serial.println(doc_id);
         char counter[10];
-        sprintf( counter, "%d", packetNumber );
+        sprintf( counter, "%d", packetNumber);
 
         // Create json with the base64 data in hex, the tracker callsign and the current timestamp
         sprintf( json,
@@ -166,17 +167,16 @@ int uploadTelemetryPacket( char * Sentence , int packetNumber, char * callSign)
 
 int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float gps_lon, const char *antenna)
 {
-       int httpResponseCode;
+       int httpResponseCode=0;
        char JsonData[200];
        char payload[300];
        HTTPClient http;   
-        const char * strTime = "2019-05-04T13:00:00";
-
+       // const char * strTime = "2019-05-04T13:00:00";
        
        if(WiFi.status()== WL_CONNECTED){
     
-        sprintf( JsonData, "{\"latitude\": %f, \"longitude\": %f}",
-                     gps_lat, gps_lon );
+       sprintf( JsonData, "{\"latitude\": %f, \"longitude\": %f, \"chase\": %s}",
+                     gps_lat, gps_lon, "true" );
         
         sprintf( payload, "callsign=%s&time=%d&data=%s", callsign,
                      (int) time(NULL), JsonData );
@@ -186,9 +186,9 @@ int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float g
         
         //http.addHeader("Accept","application/json");            
         //http.addHeader("Content-Type","application/json");            
+        http.begin("http://habitat.habhub.org/transition/listener_telemetry");
         http.addHeader("Content-Type", "application/x-www-form-urlencoded");
         http.addHeader("charsets","utf-8");            
-        http.begin("http://habitat.habhub.org/transition/listener_telemetry");
         
        int  httpResponseCode = http.POST(payload);   
         
@@ -228,9 +228,11 @@ int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float g
         //http.addHeader("charsets","utf-8");            
 
 
-        //http.begin("http://habitat.habhub.org/transition/listener_information");
+        http.begin("http://habitat.habhub.org/transition/listener_information");
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+        http.addHeader("charsets","utf-8");            
 
-        http.begin("192.168.1.6:1880/habitat");
+//        http.begin("192.168.1.6:1880/habitat");
         
        int  httpResponseCode = http.POST(payload);   
         

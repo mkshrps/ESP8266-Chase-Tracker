@@ -1,0 +1,2 @@
+void getTelemetryData(char *rxptr);
+

@@ -66,7 +66,7 @@ int BuildSentence(char *txLine,char * rxLine, int txLineMaxLen, const char *payl
             "$$%s,%s",payloadID,&rxLine[start]);
 
     // make sure we can fit crc on end of string
-    if(txLineMaxLen > strlen(txLine) + 8 ){
+    if((size_t)txLineMaxLen > strlen(txLine) + (size_t)8 ){
         // crc all characters after the $$ at start of string
         slen = calcCRC(&txLine[2]);
     }

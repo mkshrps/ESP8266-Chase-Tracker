@@ -1,5 +1,7 @@
 /*******************************************
- * LoRa Receiver with OLED support
+ * LoRa Receiver with LCD support
+ * Mike Sharps 15/7/2019
+ * R  1.0.0
  * */
 
 #define _MAIN_
@@ -11,7 +13,7 @@
 #include <Wire.h>
 #include <TinyGPSPlus.h>
 #include <SoftwareSerial.h>
-#include <U8x8lib.h>
+//#include <U8x8lib.h>
 #include <LiquidCrystal_I2C.h>
 #include "main.h"
 #include "ESP8266WiFi.h"
@@ -20,6 +22,7 @@
 #include "calc_crc.h"
 #include "mjswifi.h"
 #include <LoRa.h>
+#include "telemetry.h"
 
 #define BAND    4345E5  //you can set band here directly,e.g. 868E6,915E6
 // define this if running on heltec board comment out if not
@@ -53,7 +56,7 @@ void onReceive(int packetSize);
 #define I2C_ADDRESS 0x3C
 #define NUM_PAGES   4
 #define START_PAGE  0
-#define HAB_UPDATE_TIMEOUT 20000
+#define HAB_UPDATE_TIMEOUT 15000
 
 int habhubStatus = 0;
 int habhubTimer = 20;
@@ -68,16 +71,15 @@ void onReceive(int packetSize);
 //const char* ssid     = "Mike's iPhone SE";
 //const char* password = "MjKmJe6360";
 
-
 ESP8266WiFiMulti WiFiMulti;
 WiFiClient espClient;
 
 static const uint32_t GPSBaud = 9600;
-//const char *habID = "MWH01";
-const char *habID = "LYCEUM";
+const char *ListenerID = "MJSBASE";
+//const char *habID = "LYCEUM";
 
 char rxBuffer[256];
-char txBuffer[250];
+char lastValidString[250];
 
 
 int printTimer = 200;
@@ -93,8 +95,8 @@ byte flags = 0;
 struct buttonT{
 int buttonPin = 2;
 int lastButtonState;
-int lastDebounceTime;
-int debounceDelay = 100;
+unsigned int lastDebounceTime;
+unsigned int debounceDelay = 100;
 bool buttonState ;
 bool buttonPressed = false; 
 } button1;
@@ -126,6 +128,8 @@ bool localGPS_valid = false, remoteGPS_valid = false;
 bool wifiok = false;
 // current lora frequency
 long currentFrq = 4345E5;    
+char pbuff[100];
+int listnerCount = 0;
 
 void setup()
 {
@@ -180,11 +184,25 @@ void setup()
     Serial.println("Lora not detected");
   }
 
+  // set the LoRa parameters to standard PITS mode
+/*
   LoRa.setSpreadingFactor(7);
+
   LoRa.setSignalBandwidth(20.8E3);
   LoRa.setCodingRate4(8);
+
+
+  LoRa.setSpreadingFactor(8);
+
+  LoRa.setSignalBandwidth(62.5E3);
+  LoRa.setCodingRate4(8);
+*/
+  LoRa.setSpreadingFactor(11);
+  LoRa.setSignalBandwidth(20.8E3);
+  LoRa.setCodingRate4(8);
+  
   //LoRa.setPreambleLength(preambleLength);
-  LoRa.setSyncWord(0x12);
+//  LoRa.setSyncWord(0x12);
   LoRa.crc();
   LoRa.setTxPower(15,PA_OUTPUT_PA_BOOST_PIN);
   
@@ -192,29 +210,14 @@ void setup()
 
   ss.begin(9600);
 
-  time_t rawtime;
-  struct tm * timeinfo;
-  int year, month ,day;
-  year = 2019;
-  month = 4;
-  day = 3;
-
-  /* get current timeinfo and modify it to the user's choice */
-  time ( &rawtime );
-  timeinfo = localtime ( &rawtime );
-  timeinfo->tm_year = 2019;
-  timeinfo->tm_mon = month;
-  timeinfo->tm_mday = day;
-
-  /* call mktime: timeinfo->tm_wday will be set */
-  mktime ( timeinfo );
   pinMode(button1.buttonPin,INPUT_PULLUP);
   GPS.isValid = false;
   remote_data.isValid = false;
 
   startTimer = oldTimer = millis();
-  habhubTimer = oldHabTimer = startTimer;
 
+  habhubTimer = oldHabTimer = startTimer;
+  
 }
 
 
@@ -222,6 +225,7 @@ void  readPacketsLoop(){
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
     onReceive(packetSize);
+    
     long freqErr = LoRa.packetFrequencyError();
     if(abs(freqErr) > 500){
       Serial.println("FRQ was: ");
@@ -254,6 +258,27 @@ void  readPacketsLoop(){
   }
 }
 
+void printSatData(){
+  Serial.println("location valid");
+  Serial.println("altitude valid");
+  snprintf(pbuff,100,"local Lng: %2.6f, Local Lat:%2.6f",GPS.Longitude,GPS.Latitude);
+  Serial.println(pbuff);
+
+  Serial.print("Distance (km) to Target: ");
+  Serial.println(remote_data.distancem);
+  Serial.print("Course to Target ");
+  Serial.println(remote_data.courseTo);
+  Serial.print("Human directions: ");
+  Serial.println(gps.cardinal(remote_data.courseTo));
+
+  Serial.print("satellites = ");
+  Serial.println(gps.satellites.value());
+  Serial.print("fixes = ");
+  Serial.println(gps.sentencesWithFix());
+  Serial.print("failed chk = ");
+  Serial.println(gps.failedChecksum());
+}
+
 
 void loop()
 {
@@ -261,7 +286,7 @@ void loop()
   startTimer = millis();
   habhubTimer = startTimer;
 
-  if((startTimer - oldTimer) > 5000 ){
+  if((startTimer - oldTimer) > 10000 ){
     oldTimer = startTimer;
     onesec_events();
   }
@@ -299,7 +324,6 @@ void loop()
 
     readPacketsLoop();
 
-    char pbuff[100];
     while (ss.available() > 0){
       gps.encode(ss.read());
     }
@@ -309,16 +333,10 @@ void loop()
         if (gps.location.isValid()){
           GPS.Longitude = (float) gps.location.lng();
           GPS.Latitude = (float) gps.location.lat();
-          
-
-          //Serial.print(GPS.Longitude);
-          //Serial.print(GPS.Latitude);
-          
         }
 
         if (gps.altitude.isValid()){
           GPS.Altitude = (long) gps.altitude.meters();
-
         }
 
         // if gps data is ready
@@ -345,50 +363,19 @@ void loop()
 
     if(--printTimer <= 0){
       if(GPS.isValid){
-        Serial.println("location valid");
-        Serial.println("altitude valid");
-        snprintf(pbuff,100,"local Lng: %2.6f, Local Lat:%2.6f",GPS.Longitude,GPS.Latitude);
-        Serial.println(pbuff);
-
-        Serial.print("Distance (km) to Target: ");
-        Serial.println(remote_data.distancem);
-        Serial.print("Course to Target ");
-        Serial.println(remote_data.courseTo);
-        Serial.print("Human directions: ");
-        Serial.println(gps.cardinal(remote_data.courseTo));
-    
-        Serial.print("satellites = ");
-        Serial.println(gps.satellites.value());
-        Serial.print("fixes = ");
-        Serial.println(gps.sentencesWithFix());
-        Serial.print("failed chk = ");
-        Serial.println(gps.failedChecksum());
-    
-        }
-
+        //printSatData();
+      }
       else{
         Serial.println("No local GPS Data received");
       }
       printTimer = 200;
-
     }
 
       // Process message
       if(rxDone==true){
-        //Serial.println("Message Received");
-        Serial.print("This Node=> ");
-        Serial.print(rxBuffer[0],DEC);
-        Serial.print(" Gateway Node=> ");
-        Serial.print(rxBuffer[1],DEC);
-        Serial.print(" Gateway ID=> ");
-        Serial.print(rxBuffer[2],DEC);
-        Serial.print(" Gateway Flags=> ");
-        Serial.print(rxBuffer[3],HEX);
-        Serial.println("");
-        Serial.print("Bytes Received=> ");
-        
-        // if no gps data at remote station just display a waiting message
-        if(rxBuffer[4]=='$' && rxBuffer[5]=='?'){
+    
+        // if message is not telemetry
+        if(rxBuffer[0]=='$' && rxBuffer[1]=='?'){
 
           int remoteID = (int) rxBuffer[1];
           
@@ -397,129 +384,55 @@ void loop()
 
         // data ok
         else {
-
-          //Data Received
-          char * rxptr;
-          // extract the values
-          rxptr = &rxBuffer[4];
+          Serial.println(rxBuffer);
           
-          // just test CRC function 'habitat' should checksub 0x3EFB
-          //char testBuffer[100];
-          //strcpy(testBuffer,"habitat");
-          //calcCRC(testBuffer);
-          //Serial.println(testBuffer);
-
-          // prep for habhub
-
-          BuildSentence(txBuffer,rxptr,sizeof(txBuffer),habID);
-          Serial.println(txBuffer);
-          flightCount++;
+          char *tmpBuff = (char *) malloc(sizeof(rxBuffer));
+          strcpy(tmpBuff,rxBuffer);
+          // extract the telem values
+          getTelemetryData(tmpBuff);
           
-          // send to habhub
-          if((habhubTimer - oldHabTimer) > HAB_UPDATE_TIMEOUT ){
-            oldHabTimer = habhubTimer;
+          free((void *)tmpBuff);
+          if(remote_data.isValid){
+            strcpy(lastValidString,rxBuffer);
 
-            habhubStatus = uploadTelemetryPacket( txBuffer , flightCount , (char *) habID );
           }
-
-          //Serial.println(rxptr);
-          // process received data and store as variables
-          rxptr++;
-          // initialise strtok()
-          char* strval = strtok(rxptr, ",");
-          int valcount = 0;
-          double val = 0.0;
-          int ival = 0;
-          // now loop round the substrings  
-          while(strval != 0)
-          {
-            switch(valcount){
-              case 0:
-              val = atof(strval);
-              remote_data.longitude = val;
-              //Serial.print(val,DEC);
-              //Serial.print(":");    
-              break;
-
-              case 1:
-              val = atof(strval);
-              remote_data.latitude = val;
-              //Serial.print(val,DEC);
-              //Serial.print(":");    
-              // Find the next command in input string
-              break;
-              
-              case 2:
-              val = atof(strval);
-              remote_data.alt = val;
-              //Serial.print(val);
-              //Serial.print(":");    
-              break;
-
-              case 3:
-              // Temp data
-              ival = atoi(strval);
-              remote_data.satellites = ival;
-              //Serial.print(ival,DEC);
-              //Serial.print(":");    
-              break;
-              
-              case 4:
-              // hours
-              ival = atoi(strval);
-              remote_data.hours = ival;
-              //Serial.print(ival,DEC);
-              //Serial.print(":");    
-              break;
-              
-              case 5:
-              // mins
-              ival = atoi(strval);
-              remote_data.minutes = ival;
-              //Serial.print(ival,DEC);
-              //Serial.print(":");    
-              break;
-              
-              case 6:
-              // seconds
-              ival = atoi(strval);
-              remote_data.seconds = ival;
-              //Serial.print(ival,DEC);
-              //Serial.print(":");    
-              break;
-
-              case  7:
-              // flightCount
-              val = atoi(strval);
-              remote_data.flightCount = val;
-              //Serial.print(val,DEC);
-              break;
-            
-            }
-            valcount ++;
-            // next substring
-            strval = strtok(0, ",");
+          // BuildSentence(txBuffer,rxBuffer,sizeof(txBuffer),remote_data.callSign);
           
-          }
           //rssi = LoRa.packetRssi();
           snr = LoRa.packetSnr();
 
-          remote_data.isValid = true;
-          //display_gps();
-          //display_direction_screen();
+          //remote_data.isValid = true;
         }
     rxDone = false;
     delay(50);
     }
+
     else{
       if(!remote_data.active){
         remote_data.rssi = 0;
-        //remote_data. = 0;
       }
 
     }
 
-  
+    // time to send to send to habhub
+    if((habhubTimer - oldHabTimer) > HAB_UPDATE_TIMEOUT ){
+      oldHabTimer = habhubTimer;
+      // only send the last valid telemetry string if it's received anything
+      if(strlen(lastValidString)){
+        Serial.println(lastValidString);  
+        habhubStatus = uploadTelemetryPacket( lastValidString , remote_data.flightCount , (char *)ListenerID);
+      }
+      else{
+        habhubStatus = -2; // no valid data to upload yet
+      }
+      if(listnerCount++ > 2){
+        listnerCount = 0;
+        // update Listener
+        if(GPS.isValid){
+          uploadListenerPacket((char *)ListenerID,time(NULL),GPS.Latitude,GPS.Longitude,"Whip");
+        }
+      }
+    }
 }
 
 void onReceive(int packetSize)
@@ -535,18 +448,18 @@ void onReceive(int packetSize)
   memset(rxBuffer,0,sizeof(rxBuffer));
 
   // read packet
-  for (int i = 0; i < packetSize; i++)
+  int i;
+  for (i = 0; i < packetSize; i++)
   {
     rxBuffer[i] = (char)LoRa.read(); 
     //Serial.print(rxBuffer[i]);
-
   }
-  
+  rxBuffer[i] = 0;
+
   // print RSSI of packet
   Serial.print(" RSSI ");
   remote_data.rssi = LoRa.packetRssi(); 
   Serial.println(remote_data.rssi);
-
   rxDone = true;
 }
 
@@ -666,6 +579,14 @@ void display_hab(){
       lcd.clear();
       lcd.setCursor(0,0);
       lcd.print("HAB is Here");
+      if(remote_data.isValid){
+        lcd.print(" *");
+      }
+      else
+      {
+        lcd.print("x");
+      }
+      
       val = remote_data.longitude;
       dtostrf(val,4,6,dstr);
       //Serial.println(dstr);
@@ -685,21 +606,9 @@ void display_hab(){
       lcd.print("Alt: ");
       lcd.print(dstr);
 
-      val = remote_data.hours+1;
-      dtostrf(val,2,0,dstr);
-      lcd.setCursor(7,3);
-      lcd.print("Time:");
-      lcd.print(dstr);
-      lcd.print(":");
-      
-      val = remote_data.minutes;
-      dtostrf(val,2,0,dstr);
-      lcd.print(dstr);
-      lcd.print(":");
-      
-      val = remote_data.seconds;
-      dtostrf(val,2,0,dstr);
-      lcd.print(dstr);
+      lcd.setCursor(10,3);
+      lcd.print("T:");
+      lcd.print(remote_data.time);
       
       //itoa(remote_data.flightCount,dstr,10);
       //lcd.println(dstr);

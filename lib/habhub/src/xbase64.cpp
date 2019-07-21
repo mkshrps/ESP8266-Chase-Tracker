@@ -15,7 +15,7 @@ static char encoding_table[] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 };
 
 static char *decoding_table = NULL;
-static int mod_table[] = { 0, 2, 1 };
+static unsigned int mod_table[] = { 0, 2, 1 };
 
 
 char *
@@ -24,7 +24,7 @@ xbase64_encode( const char *data,
                size_t * output_length, char *encoded_data )
 {
 
-    int i, j;
+    unsigned int i, j;
 
     *output_length = 4 * ( ( input_length + 2 ) / 3 );
 
@@ -67,7 +67,7 @@ build_decoding_table(  )
 char *
 xbase64_decode( const char *data, size_t input_length, size_t * output_length )
 {
-    int i, j;
+    unsigned int i, j;
 
     if ( decoding_table == NULL )
         build_decoding_table(  );
@@ -100,6 +100,7 @@ xbase64_decode( const char *data, size_t input_length, size_t * output_length )
         uint32_t triple = ( sextet_a << 3 * 6 )
             + ( sextet_b << 2 * 6 )
             + ( sextet_c << 1 * 6 ) + ( sextet_d << 0 * 6 );
+
 
         if ( j < *output_length )
             decoded_data[j++] = ( triple >> 2 * 8 ) & 0xFF;

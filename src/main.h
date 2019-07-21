@@ -25,6 +25,7 @@ struct TGPS
 
 struct remoteT
 {
+  char callSign[12];
   long  lastPacketAt;
   double longitude;
   double latitude;
@@ -50,9 +51,10 @@ struct remoteT
   byte PowerMode;
   bool isValid;
   int rssi;
+  char time[12];
+  int speed;
+  int heading;
 } remote_data;
-
-
 
 #else
 
@@ -73,8 +75,10 @@ extern struct TGPS
 
 extern int SentenceCounter;
 extern unsigned char packet[];                 // used to send arbitrary LoRa Messages for diagnostics and gen info
+
 extern struct remoteT
 {
+  char callSign[12];
   long  lastPacketAt;
   double longitude;
   double latitude;
@@ -100,6 +104,9 @@ extern struct remoteT
   byte PowerMode;
   bool isValid;
   int rssi;
+  char time[12];
+  int speed;
+  int heading;
 } remote_data;
 
 #endif
@@ -107,7 +114,7 @@ extern struct remoteT
 void display_init(void);
 void display_gps(void);
 void display_direction_screen(void);
-void  display_frequency_page(void);
+void display_frequency_page(void);
 void displayPage(int page);
 void onesec_events(void);
 void display_hab();
