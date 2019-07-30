@@ -51,6 +51,7 @@ struct remoteT
   byte PowerMode;
   bool isValid;
   int rssi;
+  int currentRssi;
   char time[12];
   int speed;
   int heading;
@@ -104,6 +105,7 @@ extern struct remoteT
   byte PowerMode;
   bool isValid;
   int rssi;
+  int currentRssi;
   char time[12];
   int speed;
   int heading;
@@ -115,9 +117,14 @@ void display_init(void);
 void display_gps(void);
 void display_direction_screen(void);
 void display_frequency_page(void);
+void display_signal_page(); 
 void displayPage(int page);
 void onesec_events(void);
 void display_hab();
+void setPitsMode(int mode);
+void setCustomLoRaMode(int sf,int cr,float bw);
+
+
 
 
 

@@ -21,7 +21,7 @@
 #include <habhub.h>
 #include "calc_crc.h"
 #include "mjswifi.h"
-#include <LoRa.h>
+#include <LoRa_LIB.h>
 #include "telemetry.h"
 
 #define BAND    4345E5  //you can set band here directly,e.g. 868E6,915E6
@@ -54,7 +54,7 @@ void onReceive(int packetSize);
 #define A0_MULTIPLIER      4.9
 // define for lcd ascii library
 #define I2C_ADDRESS 0x3C
-#define NUM_PAGES   4
+#define NUM_PAGES   5
 #define START_PAGE  0
 #define HAB_UPDATE_TIMEOUT 15000
 
@@ -80,7 +80,6 @@ const char *ListenerID = "MJSBASE";
 
 char rxBuffer[256];
 char lastValidString[250];
-
 
 int printTimer = 200;
 //int rssi = 0;
@@ -127,9 +126,15 @@ SoftwareSerial ss(RXPin, TXPin);
 bool localGPS_valid = false, remoteGPS_valid = false;
 bool wifiok = false;
 // current lora frequency
-long currentFrq = 4345E5;    
+long currentFrq = 434500000;    
 char pbuff[100];
 int listnerCount = 0;
+
+long stepFrq(long frq);
+int n=0;
+int payloadLength = 0;    // set >0 for implicit
+
+////  Setup   /////
 
 void setup()
 {
@@ -155,6 +160,7 @@ void setup()
 
     //WiFiMulti.addAP("SmartCityControl", "38289743");   // add Wi-Fi networks you want to connect to
     WiFiMulti.addAP("Mike's iPhone SE", "MjKmJe6360");
+    WiFiMulti.addAP("Julie iPhone", "MjKmJe6360");
     WiFiMulti.addAP("VodafoneConnect96376469", "58xdlm9ddipa8dh");   // add Wi-Fi networks you want to connect to
 
 //  wifiok = connectToWifi(espClient,ssid,password);
@@ -180,30 +186,18 @@ void setup()
   SPI.begin();    // default esp8266 SPI pins 
   LoRa.setPins(SS,-1,DIO);
 
-  if(!LoRa.begin(4345E5)){
+// Lora SETUP //
+  
+  if(!LoRa.begin(currentFrq)){
     Serial.println("Lora not detected");
   }
 
   // set the LoRa parameters to standard PITS mode
-/*
-  LoRa.setSpreadingFactor(7);
-
-  LoRa.setSignalBandwidth(20.8E3);
-  LoRa.setCodingRate4(8);
-
-
-  LoRa.setSpreadingFactor(8);
-
-  LoRa.setSignalBandwidth(62.5E3);
-  LoRa.setCodingRate4(8);
-*/
-  LoRa.setSpreadingFactor(11);
-  LoRa.setSignalBandwidth(20.8E3);
-  LoRa.setCodingRate4(8);
+  setPitsMode(1); // test on SSDV mode
   
   //LoRa.setPreambleLength(preambleLength);
-//  LoRa.setSyncWord(0x12);
-  LoRa.crc();
+  LoRa.setSyncWord(0x12);
+  LoRa.enableCrc();
   LoRa.setTxPower(15,PA_OUTPUT_PA_BOOST_PIN);
   
   Serial.println("LoRa in receive mode");
@@ -217,16 +211,104 @@ void setup()
   startTimer = oldTimer = millis();
 
   habhubTimer = oldHabTimer = startTimer;
-  
+
+    
 }
 
 
+long stepFrq(long frq){
+
+  frq += 1000;
+  
+  LoRa.setFrequency(frq);
+  Serial.print("New Frq = ");
+  Serial.println(frq);
+  return frq;
+
+}
+
+
+void setPitsMode(int mode){
+    int sf,cr;
+    long bw;
+    payloadLength = 0;
+  
+  switch(mode){
+    
+    case 0:
+      sf=11;
+      bw=20.8E3;
+      cr = 8;
+      break;
+
+    case 1:
+      sf=6;
+      bw=20.8E3;
+      cr = 5;
+      payloadLength = 255;
+      break;
+
+    case 2:
+      sf=7;
+      bw = 62.5E3;
+      cr = 8;
+      break;
+    
+    case 3:
+      sf=7;
+      bw = 20.8E3;
+      cr = 8;
+      break;
+    
+    default:
+      sf=7;
+      bw = 62.5E3;
+      cr = 8;
+      break;
+
+    
+    }
+
+    LoRa.setSpreadingFactor(sf);
+    LoRa.setSignalBandwidth(bw);
+    LoRa.setCodingRate4(cr);
+    
+    Serial.print("SF = " );
+    Serial.print(sf);
+    Serial.print(" BW = " );
+    Serial.print(bw);
+    Serial.print(" CR = " );
+    Serial.println(cr);
+
+   //return payloadLength;
+
+}
+
+
+void setCustomLoRaMode(int sf,int cr,float bw){
+
+    LoRa.setSpreadingFactor(sf);
+    LoRa.setSignalBandwidth(bw);
+    LoRa.setCodingRate4(cr);
+    //(sf==6) payloadLength = ? 255 : 0  ;
+
+    Serial.print("SF = " );
+    Serial.print(sf);
+    Serial.print(" BW = " );
+    Serial.print(bw);
+    Serial.print(" CR = " );
+    Serial.println(cr);
+
+}
+
 void  readPacketsLoop(){
-  int packetSize = LoRa.parsePacket();
+  //Serial.println("read loop");
+  int packetSize = LoRa.parsePacket(payloadLength); // for implicit just set anything > 0
   if (packetSize) {
     onReceive(packetSize);
     
     long freqErr = LoRa.packetFrequencyError();
+    Serial.println(freqErr);
     if(abs(freqErr) > 500){
       Serial.println("FRQ was: ");
       Serial.println(currentFrq);
@@ -286,9 +368,21 @@ void loop()
   startTimer = millis();
   habhubTimer = startTimer;
 
-  if((startTimer - oldTimer) > 10000 ){
+  if((startTimer - oldTimer) > 100 ){
     oldTimer = startTimer;
-    onesec_events();
+    int currentRSSI = LoRa.currentRssi();
+    //Serial.print(currentRSSI);
+    remote_data.currentRssi = currentRSSI;
+    if(n++ >= 10){
+      onesec_events();
+      n=0;
+    }
+    /*
+    if(n++ >= 10){
+      currentFrq = stepFrq(currentFrq);
+      n=0;
+    }
+    */
   }
 
   // read the state of the switch into a local variable:
@@ -408,8 +502,9 @@ void loop()
     }
 
     else{
+      
       if(!remote_data.active){
-        remote_data.rssi = 0;
+        //remote_data.rssi = 0;
       }
 
     }
@@ -441,10 +536,11 @@ void onReceive(int packetSize)
     //Serial.println("****Invalid packet****");
     return;
   }
-
+  
   // received a packet
   Serial.println("");
   Serial.print("Received packet ");
+
   memset(rxBuffer,0,sizeof(rxBuffer));
 
   // read packet
@@ -496,6 +592,9 @@ void displayPage(int page){
       display_gps();
     break;
     case  3:
+      display_signal_page();    
+    break;
+    case  4:
       display_frequency_page();    
     break;
     
@@ -506,6 +605,22 @@ void display_init(){
 }
 
 void  display_frequency_page(void){
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Curr Frq ");
+      lcd.print(currentFrq);
+
+      lcd.setCursor(0,1);
+      lcd.print("RSSI ");
+      lcd.print(remote_data.rssi);
+      lcd.setCursor(0 ,2);
+      lcd.print("Frq Error ");
+      long freqErr = LoRa.packetFrequencyError();
+      lcd.print(freqErr);
+
+}
+
+void  display_signal_page(void){
       lcd.clear();
       lcd.setCursor(0,0);
       if(remote_data.active){
@@ -519,6 +634,9 @@ void  display_frequency_page(void){
       lcd.setCursor(0,1);
       lcd.print("RSSI ");
       lcd.print(remote_data.rssi);
+      lcd.setCursor(10 ,1);
+      lcd.print("CRSS ");
+      lcd.print(remote_data.currentRssi);
       lcd.setCursor(0,2);
       lcd.print("SNR ");
       lcd.print(snr);
