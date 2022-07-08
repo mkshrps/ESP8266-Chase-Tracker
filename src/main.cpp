@@ -24,8 +24,8 @@
 #include <LoRa_LIB.h>
 #include "telemetry.h"
 
-#define BAND    4345E5  //you can set band here directly,e.g. 868E6,915E6
-// define this if running on heltec board comment out if not
+#define DEBUG 0
+#define WIFI_ON 1
 
 void onReceive(int packetSize);
 #define ESP8266_R1
@@ -61,6 +61,10 @@ void onReceive(int packetSize);
 int habhubStatus = 0;
 int habhubTimer = 20;
 int oldHabTimer = 0;
+int buttonLongDelay = 2000;
+int buttonShortDelay = 500;
+int buttonStart = 0;
+int buttonEnd = 0;
 
 void onReceive(int packetSize);
 
@@ -75,7 +79,7 @@ ESP8266WiFiMulti WiFiMulti;
 WiFiClient espClient;
 
 static const uint32_t GPSBaud = 9600;
-const char *ListenerID = "MJSBASE";
+const char *ListenerID = "MJSCHASE";
 //const char *habID = "LYCEUM";
 
 char rxBuffer[256];
@@ -113,9 +117,9 @@ int startTimer, oldTimer;
 // OLED display device 
 //U8X8_SSD1306_128X64_NONAME_SW_I2C lcd(/* clock=*/ 5, /* data=*/ 4);
 
-//LiquidCrystal_I2C lcd(0x27,20,4);
+LiquidCrystal_I2C lcd(0x27,20,4);
 //I2C display declaration
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE); 
+//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE); 
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
@@ -124,15 +128,20 @@ static const int RXPin = 0, TXPin = 02;
 // The serial connection to the GPS device
 SoftwareSerial ss(RXPin, TXPin);
 bool localGPS_valid = false, remoteGPS_valid = false;
-bool wifiok = false;
+
 // current lora frequency
-long currentFrq = 434500000;    
+long currentFrq = 434500000;  
+//long currentFrq = 433650000; // calling mode frq  
+
 char pbuff[100];
 int listnerCount = 0;
 
 long stepFrq(long frq);
 int n=0;
 int payloadLength = 0;    // set >0 for implicit
+int loraMode = 1;         // this is whtat most people seem to use
+//int loraMode = 5;         // calling mode
+
 
 ////  Setup   /////
 
@@ -160,23 +169,23 @@ void setup()
 
     //WiFiMulti.addAP("SmartCityControl", "38289743");   // add Wi-Fi networks you want to connect to
     WiFiMulti.addAP("Mike's iPhone SE", "MjKmJe6360");
-    WiFiMulti.addAP("Julie iPhone", "MjKmJe6360");
     WiFiMulti.addAP("VodafoneConnect96376469", "58xdlm9ddipa8dh");   // add Wi-Fi networks you want to connect to
+    
 
 //  wifiok = connectToWifi(espClient,ssid,password);
-  wifiok = connectToWifiMulti(WiFiMulti);
+  //wifiok = connectToWifiMulti(WiFiMulti);
   
   lcd.clear();
   lcd.setCursor(0,0);
   lcd.print("HAB Track");
   lcd.setCursor(0,1);
-  if(wifiok){
+  if(WIFI_ON){
     lcd.print("Conn to WIFI:");
     lcd.setCursor(0,2);
     lcd.print(WiFi.SSID());
   }
   else{
-    lcd.print("No WIFI");
+    lcd.print("Disabled WIFI ");
   
   }
   
@@ -193,12 +202,12 @@ void setup()
   }
 
   // set the LoRa parameters to standard PITS mode
-  setPitsMode(1); // test on SSDV mode
+  setPitsMode(loraMode); // test on SSDV mode
   
   //LoRa.setPreambleLength(preambleLength);
-  LoRa.setSyncWord(0x12);
+  //LoRa.setSyncWord(0x12);
   LoRa.enableCrc();
-  LoRa.setTxPower(15,PA_OUTPUT_PA_BOOST_PIN);
+  LoRa.setTxPower(10,PA_OUTPUT_PA_BOOST_PIN);
   
   Serial.println("LoRa in receive mode");
 
@@ -259,14 +268,18 @@ void setPitsMode(int mode){
       bw = 20.8E3;
       cr = 8;
       break;
-    
+
+    case 5:
+    sf = 11;
+    bw=41.7E3;
+    cr=8;
+    break;
+
     default:
       sf=7;
       bw = 62.5E3;
       cr = 8;
       break;
-
-    
     }
 
     LoRa.setSpreadingFactor(sf);
@@ -335,7 +348,6 @@ void  readPacketsLoop(){
     if((millis() - remote_data.lastPacketAt) >= 20000){
       remote_data.active=false;
       remote_data.rssi = 0;
-
     }
   }
 }
@@ -399,14 +411,41 @@ void loop()
 
       // if the button state has changed:
       if (reading != button1.buttonState) {
+        
         button1.buttonState = reading;
 
         // only toggle the LED if the new button state is HIGH
         if (button1.buttonState == LOW) {
           button1.buttonPressed = true;
-          
+          buttonStart = millis();
+          buttonEnd = buttonStart;
+        }
+        // button just got released
+        else{
+          if(millis() - buttonStart > buttonLongDelay){
+              // do long delay task
+              if(currentPage == 4){
+                if(loraMode == 1){
+                  loraMode =3;
+                  currentFrq = 434450E3;
+
+                  LoRa.setFrequency(currentFrq);
+                } 
+                else{
+                  loraMode = 1;
+                  currentFrq = 434500E3;
+                  LoRa.setFrequency(currentFrq);
+                }
+                setPitsMode(loraMode);
+              }
+
+        }
+        else{
+          // short delay so just change page  
           if(++currentPage > NUM_PAGES) currentPage = START_PAGE;
           displayPage(currentPage);
+          }
+              
         }
       }
     }
@@ -419,7 +458,11 @@ void loop()
     readPacketsLoop();
 
     while (ss.available() > 0){
-      gps.encode(ss.read());
+      char dat = ss.read();
+      gps.encode(dat);
+if(DEBUG == 1){
+      Serial.print(dat);
+}
     }
     //  Serial.println("\n decoded GPS");
       // load up the LoRa struct with data
@@ -617,6 +660,10 @@ void  display_frequency_page(void){
       lcd.print("Frq Error ");
       long freqErr = LoRa.packetFrequencyError();
       lcd.print(freqErr);
+      lcd.setCursor(0 ,3);
+      lcd.print("Lora Mode ");
+      lcd.print(loraMode);
+      
 
 }
 

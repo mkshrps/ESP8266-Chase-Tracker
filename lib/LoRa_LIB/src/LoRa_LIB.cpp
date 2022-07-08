@@ -449,6 +449,7 @@ long LoRaClass::getSignalBandwidth()
     case 7: return 125E3;
     case 8: return 250E3;
     case 9: return 500E3;
+    default: return 250E3;
   }
 }
 

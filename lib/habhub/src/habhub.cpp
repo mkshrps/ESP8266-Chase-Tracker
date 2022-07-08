@@ -31,7 +31,10 @@ int SendHabPayload(char *payload,char *docID){
 
     if(WiFi.status()== WL_CONNECTED){
     
-        HTTPClient http;   
+        HTTPClient http;
+        
+        WiFiClient wifiClient;
+
         const char * url_base = "http://habitat.habhub.org/habitat/_design/payload_telemetry/_update/add_listener/%s";
 //        const char * url_base_test = "http://192.168.1.6:1880/habitat";
         
@@ -47,7 +50,7 @@ int SendHabPayload(char *payload,char *docID){
         Serial.println(url);
         Serial.print("Send packet to habhub - Response=");
 
-        http.begin(url);
+        http.begin(wifiClient,url);
         http.addHeader("Accept","application/json");            
         http.addHeader("Content-Type","application/json");            
         http.addHeader("charsets","utf-8");            
@@ -170,6 +173,8 @@ int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float g
        int httpResponseCode=0;
        char JsonData[200];
        char payload[300];
+       
+       WiFiClient wifiClient;
        HTTPClient http;   
        // const char * strTime = "2019-05-04T13:00:00";
        
@@ -186,7 +191,7 @@ int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float g
         
         //http.addHeader("Accept","application/json");            
         //http.addHeader("Content-Type","application/json");            
-        http.begin("http://habitat.habhub.org/transition/listener_telemetry");
+        http.begin(wifiClient,"http://habitat.habhub.org/transition/listener_telemetry");
         http.addHeader("Content-Type", "application/x-www-form-urlencoded");
         http.addHeader("charsets","utf-8");            
         
@@ -228,7 +233,7 @@ int uploadListenerPacket(char *callsign, time_t gps_time, float gps_lat, float g
         //http.addHeader("charsets","utf-8");            
 
 
-        http.begin("http://habitat.habhub.org/transition/listener_information");
+        http.begin(wifiClient,"http://habitat.habhub.org/transition/listener_information");
         http.addHeader("Content-Type", "application/x-www-form-urlencoded");
         http.addHeader("charsets","utf-8");            
 

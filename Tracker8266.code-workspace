@@ -2,21 +2,6 @@
 	"folders": [
 		{
 			"path": "."
-		},
-		{
-			"path": "/Users/mikes/Documents/PlatformIO/Projects/CArPArkStation8266"
-		},
-		{
-			"path": "/Users/mikes/Documents/PlatformIO/Projects/ESP8266 Test"
-		},
-		{
-			"path": "/Users/mikes/Documents/PlatformIO/Projects/LoRa Mini Tracker"
-		},
-		{
-			"path": "/Users/mikes/Documents/PlatformIO/Projects/ArduinoLibs"
-		},
-		{
-			"path": "/Users/mikes/Documents/Arduino/LoraHandheldAVR_I2C"
 		}
 	],
 	"settings": {

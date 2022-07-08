@@ -153,5 +153,7 @@ bool getTelemetryData(char *rxptr){
   
   }
   //Serial.println("-");
+  return true;
 }
+
 
