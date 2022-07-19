@@ -163,8 +163,8 @@ void setup()
   lcd.print("\nTracker 434.5Mhz: ");
 
     //WiFiMulti.addAP("SmartCityControl", "38289743");   // add Wi-Fi networks you want to connect to
-    WiFiMulti.addAP("Mike's iPhone SE", "MjKmJe6360");
-    WiFiMulti.addAP("VodafoneConnect96376469", "58xdlm9ddipa8dh");   // add Wi-Fi networks you want to connect to
+    WiFiMulti.addAP("*****", "*******");
+    WiFiMulti.addAP("*****", "*******");   // add Wi-Fi networks you want to connect to
     
 
 //  wifiok = connectToWifi(espClient,ssid,password);
