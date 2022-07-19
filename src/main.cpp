@@ -69,11 +69,6 @@ int buttonEnd = 0;
 void onReceive(int packetSize);
 
 // Wifi Creds
-//const char* ssid     = "VodafoneConnect96376469";
-//const char* password = "58xdlm9ddipa8dh";
-
-//const char* ssid     = "Mike's iPhone SE";
-//const char* password = "MjKmJe6360";
 
 ESP8266WiFiMulti WiFiMulti;
 WiFiClient espClient;
